@@ -1,0 +1,812 @@
+--- CONTEXT ---
+Web Application Project Structure
+
+This file contains the contents of all relevant files in the web application, including:
+1. Python backend files (.py)
+2. React/JavaScript files (.jsx, .js)
+3. Configuration files (.json, .config.js)
+4. HTML files (.html)
+5. CSS files (.css)
+
+--- BEGIN CONTENT ---
+
+
+
+=== Python Backend Files ===
+
+
+--- Content of copydata.py ---
+
+import os
+import pyperclip
+from pathlib import Path
+
+def generate_tree(startpath):
+    """Generate a tree structure of the project directory."""
+    tree = []
+    startpath = Path(startpath)
+    
+    for path in sorted(startpath.rglob('*')):
+        # Skip node_modules directory
+        if 'node_modules' in str(path):
+            continue
+            
+        relative_path = path.relative_to(startpath)
+        level = len(relative_path.parts) - 1
+        
+        if path.is_file() or path.is_dir():
+            indent = '│   ' * (level) + '├── ' if level > 0 else ''
+            name = path.name + '/' if path.is_dir() else path.name
+            tree.append(f"{indent}{name}")
+    
+    return '\n'.join(tree)
+
+def copy_project_contents(project_path, output_file):
+    """Copy contents of project files to a single file and clipboard."""
+    project_path = Path(project_path)
+    
+    content = """--- CONTEXT ---
+Web Application Project Structure
+
+This file contains the contents of all relevant files in the web application, including:
+1. Python backend files (.py)
+2. React/JavaScript files (.jsx, .js)
+3. Configuration files (.json, .config.js)
+4. HTML files (.html)
+5. CSS files (.css)
+
+--- BEGIN CONTENT ---
+
+"""
+
+    # File categories and their extensions
+    file_categories = {
+        'Python Backend': ['.py'],
+        'React/JavaScript': ['.jsx', '.js'],
+        'HTML': ['.html'],
+        'CSS': ['.css'],
+        'Configuration': ['.json', '.config.js', '.gitignore', '.env', 'README.md']
+    }
+
+    try:
+        with open(output_file, 'w', encoding='utf-8') as outfile:
+            outfile.write(content)
+
+            # Process files by category
+            for category, extensions in file_categories.items():
+                outfile.write(f"\n\n=== {category} Files ===\n")
+                
+                for ext in extensions:
+                    for file_path in project_path.rglob(f'*{ext}'):
+                        # Skip node_modules and __pycache__ directories
+                        if 'node_modules' in str(file_path) or '__pycache__' in str(file_path):
+                            continue
+                            
+                        relative_path = file_path.relative_to(project_path)
+                        file_content = f"\n\n--- Content of {relative_path} ---\n\n"
+                        
+                        try:
+                            if file_path.is_file():  # Check if it's a file before trying to read
+                                with open(file_path, 'r', encoding='utf-8') as infile:
+                                    outfile.write(file_content)
+                                    outfile.write(infile.read())
+                        except Exception as e:
+                            error_msg = f"\nError reading file {file_path}: {str(e)}\n"
+                            outfile.write(error_msg)
+
+            # Add directory tree at the end
+            tree_content = "\n\n=== Directory Tree ===\n\n"
+            tree_content += generate_tree(project_path)
+            outfile.write(tree_content)
+
+            # Read the complete content for clipboard
+            outfile.seek(0)
+            complete_content = outfile.read()
+            
+        # Copy to clipboard
+        pyperclip.copy(complete_content)
+        
+        print(f"Project contents have been written to {output_file} and copied to clipboard")
+        print("\nFile categories processed:")
+        for category in file_categories:
+            print(f"- {category}")
+            
+    except Exception as e:
+        print(f"Error processing project files: {str(e)}")
+        print(f"Make sure you have write permissions for {output_file}")
+
+# Usage
+if __name__ == "__main__":
+    # Get the current working directory
+    current_dir = Path.cwd()
+    
+    # Specify the project path and output file
+    project_path = current_dir / "WEB_React"
+    output_file = project_path / "project_contents.txt"
+    
+    # Create output directory if it doesn't exist
+    output_file.parent.mkdir(parents=True, exist_ok=True)
+    
+    try:
+        copy_project_contents(project_path, output_file)
+    except Exception as e:
+        print(f"Error processing project files: {str(e)}")
+        print(f"Current working directory: {current_dir}")
+        print(f"Project path: {project_path}")
+        print(f"Output file: {output_file}")
+
+--- Content of backend\config.py ---
+
+class Config:
+    SQLALCHEMY_DATABASE_URI = 'sqlite:///drilling.db'
+    SQLALCHEMY_TRACK_MODIFICATIONS = False
+    SECRET_KEY = 'dev-key-change-in-production'  # Change this in production
+
+
+--- Content of backend\run.py ---
+
+from app import create_app
+
+app = create_app()
+
+if __name__ == '__main__':
+    app.run(debug=True)
+
+
+--- Content of backend\app\__init__.py ---
+
+from flask import Flask
+from flask_sqlalchemy import SQLAlchemy
+from flask_cors import CORS
+from config import Config
+
+db = SQLAlchemy()
+
+def create_app():
+    app = Flask(__name__)
+    app.config.from_object(Config)
+    
+    CORS(app)
+    db.init_app(app)
+    
+    # Import and register blueprints
+    from app.routes import bp, operations_bp, analysis_bp
+    app.register_blueprint(bp)
+    app.register_blueprint(operations_bp)
+    app.register_blueprint(analysis_bp)
+    
+    # Add a default route
+    @app.route('/')
+    def index():
+        return {"message": "Drilling Reports API is running"}
+    
+    # Create database tables
+    with app.app_context():
+        db.create_all()
+    
+    return app
+
+--- Content of backend\app\models\drilling_report.py ---
+
+from app import db
+from datetime import datetime
+
+class DrillingReport(db.Model):
+    __tablename__ = 'drilling_reports'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    report_id = db.Column(db.String(100), unique=True)
+    date = db.Column(db.DateTime, default=datetime.utcnow)
+    rig_name = db.Column(db.String(100))
+    well_name = db.Column(db.String(100))
+    current_depth = db.Column(db.Float)
+    tvd = db.Column(db.Float)
+    last_casing_size = db.Column(db.Float)
+    operations = db.relationship('Operation', backref='report', lazy=True)
+    mud_properties = db.relationship('MudProperty', backref='report', lazy=True)
+
+
+--- Content of backend\app\models\mud_property.py ---
+
+
+from app import db
+
+class MudProperty(db.Model):
+    __tablename__ = 'mud_properties'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    report_id = db.Column(db.Integer, db.ForeignKey('drilling_reports.id'))
+    weight = db.Column(db.Float)  # PCF
+    funnel_viscosity = db.Column(db.Integer)  # seconds
+    fluid_loss = db.Column(db.Float)
+    pv = db.Column(db.Integer)  # Plastic Viscosity
+    yp = db.Column(db.Integer)  # Yield Point
+    ph = db.Column(db.Float)
+    chlorides = db.Column(db.Integer)  # PPM
+
+--- Content of backend\app\models\operation.py ---
+
+from app import db
+
+class Operation(db.Model):
+    __tablename__ = 'operations'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    report_id = db.Column(db.Integer, db.ForeignKey('drilling_reports.id'))
+    start_time = db.Column(db.String(50))
+    end_time = db.Column(db.String(50))
+    hours = db.Column(db.Float)
+    phase = db.Column(db.String(50))
+    activity = db.Column(db.String(200))
+    depth_from = db.Column(db.Float)
+    depth_to = db.Column(db.Float)
+
+
+--- Content of backend\app\models\__init__.py ---
+
+
+from .drilling_report import DrillingReport
+from .operation import Operation
+from .mud_property import MudProperty
+
+--- Content of backend\app\routes\analysis.py ---
+
+from flask import Blueprint, jsonify
+
+bp = Blueprint('analysis', __name__, url_prefix='/api/analysis')
+
+@bp.route('/', methods=['GET'])
+def get_analysis():
+    return jsonify({"message": "Analysis endpoint"})
+
+@bp.route('/generate', methods=['POST'])
+def generate_analysis():
+    # TODO: Implement analysis generation
+    return jsonify({'status': 'success'}), 201
+
+
+--- Content of backend\app\routes\operations.py ---
+
+from flask import Blueprint, request, jsonify
+from app import db
+
+bp = Blueprint('operations', __name__, url_prefix='/api/operations')
+
+@bp.route('/', methods=['GET'])
+def get_operations():
+    return jsonify({"message": "Operations endpoint"})
+
+@bp.route('/', methods=['POST'])
+def create_operation():
+    # TODO: Implement operation creation
+    return jsonify({'status': 'success'}), 201
+
+
+--- Content of backend\app\routes\reports.py ---
+
+from flask import Blueprint, request, jsonify
+from app.models.drilling_report import DrillingReport
+from app import db
+
+bp = Blueprint('reports', __name__, url_prefix='/api/reports')
+
+@bp.route('/', methods=['GET'])
+def get_reports():
+    reports = DrillingReport.query.all()
+    return jsonify([{
+        'id': r.id,
+        'report_id': r.report_id,
+        'date': r.date.isoformat(),
+        'rig_name': r.rig_name,
+        'well_name': r.well_name,
+        'current_depth': r.current_depth,
+        'tvd': r.tvd
+    } for r in reports])
+
+@bp.route('/', methods=['POST'])
+def create_report():
+    data = request.json
+    report = DrillingReport(
+        report_id=data['report_id'],
+        rig_name=data['rig_name'],
+        well_name=data['well_name'],
+        current_depth=data['current_depth'],
+        tvd=data['tvd']
+    )
+    db.session.add(report)
+    db.session.commit()
+    return jsonify({'id': report.id}), 201
+
+
+--- Content of backend\app\routes\__init__.py ---
+
+from .reports import bp
+from .operations import bp as operations_bp
+from .analysis import bp as analysis_bp
+
+--- Content of backend\app\services\data_analyzer.py ---
+
+
+
+
+--- Content of backend\app\services\report_processor.py ---
+
+
+
+
+--- Content of backend\app\services\__init__.py ---
+
+
+
+
+--- Content of backend\app\utils\helpers.py ---
+
+
+
+
+--- Content of backend\app\utils\__init__.py ---
+
+
+
+
+=== React/JavaScript Files ===
+
+
+--- Content of frontend\src\App.jsx ---
+
+import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+import Layout from './components/layout/Layout';
+import Dashboard from './pages/Dashboard';
+import Reports from './pages/Reports';
+import Analysis from './pages/Analysis';
+import Settings from './pages/Settings';
+
+export default function App() {
+  return (
+    <Router>
+      <Layout>
+        <Routes>
+          <Route path="/" element={<Dashboard />} />
+          <Route path="/reports" element={<Reports />} />
+          <Route path="/analysis" element={<Analysis />} />
+          <Route path="/settings" element={<Settings />} />
+        </Routes>
+      </Layout>
+    </Router>
+  );
+}
+
+--- Content of frontend\src\index.jsx ---
+
+
+import React from 'react';
+import ReactDOM from 'react-dom/client';
+import App from './App';
+import './styles/tailwind.css';
+
+ReactDOM.createRoot(document.getElementById('root')).render(
+  <React.StrictMode>
+    <App />
+  </React.StrictMode>
+);
+
+--- Content of frontend\src\pages\Analysis.jsx ---
+
+
+
+
+--- Content of frontend\src\pages\Dashboard.jsx ---
+
+
+
+
+--- Content of frontend\src\pages\Reports.jsx ---
+
+
+
+
+--- Content of frontend\src\pages\Settings.jsx ---
+
+
+
+
+--- Content of frontend\src\components\analysis\MudAnalysis.jsx ---
+
+
+
+
+--- Content of frontend\src\components\analysis\SurveyData.jsx ---
+
+
+
+
+--- Content of frontend\src\components\analysis\TimeAnalysis.jsx ---
+
+
+
+
+--- Content of frontend\src\components\dashboard\DepthChart.jsx ---
+
+
+
+
+--- Content of frontend\src\components\dashboard\OperationsTable.jsx ---
+
+
+
+
+--- Content of frontend\src\components\dashboard\StatsCards.jsx ---
+
+
+
+
+--- Content of frontend\src\components\layout\Header.jsx ---
+
+export default function Header() {
+  return (
+    <header className="bg-white border-b border-gray-200">
+      <div className="px-4 sm:px-6 lg:px-8">
+        <div className="flex justify-between items-center h-16">
+          <div className="flex-1 flex">
+            <div className="flex-shrink-0 flex items-center">
+              {/* Add breadcrumb or page title here */}
+            </div>
+          </div>
+          <div className="flex items-center space-x-4">
+            <button className="p-2 text-gray-400 hover:text-gray-500">
+              <span className="sr-only">Notifications</span>
+              <i className="fas fa-bell w-6 h-6"></i>
+            </button>
+            <button className="p-2 text-gray-400 hover:text-gray-500">
+              <span className="sr-only">User menu</span>
+              <i className="fas fa-user-circle w-6 h-6"></i>
+            </button>
+          </div>
+        </div>
+      </div>
+    </header>
+  );
+}
+
+
+--- Content of frontend\src\components\layout\Layout.jsx ---
+
+import Sidebar from './Sidebar';
+import Header from './Header';
+
+export default function Layout({ children }) {
+  return (
+    <div className="min-h-screen bg-gray-100">
+      <Sidebar />
+      <div className="ml-64 flex flex-col min-h-screen">
+        <Header />
+        <main className="flex-1 p-6">
+          {children}
+        </main>
+      </div>
+    </div>
+  );
+}
+
+
+--- Content of frontend\src\components\layout\Sidebar.jsx ---
+
+import { Link, useLocation } from 'react-router-dom';
+import { Home, FileText, PieChart, Settings } from 'lucide-react';
+
+export default function Sidebar() {
+  const location = useLocation();
+  
+  const navigation = [
+    { name: 'Dashboard', href: '/', icon: Home },
+    { name: 'Reports', href: '/reports', icon: FileText },
+    { name: 'Analysis', href: '/analysis', icon: PieChart },
+    { name: 'Settings', href: '/settings', icon: Settings },
+  ];
+
+  return (
+    <aside className="fixed inset-y-0 left-0 w-64 bg-white border-r border-gray-200">
+      <div className="flex flex-col h-full">
+        <div className="flex items-center justify-center h-16 border-b border-gray-200">
+          <h1 className="text-xl font-bold text-gray-900">Drilling Reports</h1>
+        </div>
+        <nav className="flex-1 p-4 space-y-1">
+          {navigation.map((item) => {
+            const isActive = location.pathname === item.href;
+            return (
+              <Link
+                key={item.name}
+                to={item.href}
+                className={`flex items-center px-4 py-2 text-sm font-medium rounded-lg ${
+                  isActive
+                    ? 'bg-blue-50 text-blue-600'
+                    : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+                }`}
+              >
+                <item.icon className={`mr-3 h-5 w-5 ${
+                  isActive ? 'text-blue-600' : 'text-gray-400'
+                }`} />
+                {item.name}
+              </Link>
+            );
+          })}
+        </nav>
+      </div>
+    </aside>
+  );
+}
+
+
+--- Content of frontend\src\components\reports\ReportDetail.jsx ---
+
+
+
+
+--- Content of frontend\src\components\reports\ReportForm.jsx ---
+
+
+
+
+--- Content of frontend\src\components\reports\ReportList.jsx ---
+
+
+
+
+--- Content of frontend\postcss.config.js ---
+
+export default {
+    plugins: {
+      tailwindcss: {},
+      autoprefixer: {},
+    },
+  }
+
+--- Content of frontend\tailwind.config.js ---
+
+/** @type {import('tailwindcss').Config} */
+export default {
+  content: [
+    "./index.html",
+    "./src/**/*.{js,ts,jsx,tsx}",
+  ],
+  theme: {
+    extend: {},
+  },
+  plugins: [],
+}
+
+--- Content of frontend\vite.config.js ---
+
+import { defineConfig } from 'vite';
+import react from '@vitejs/plugin-react';
+import path from 'path';
+
+export default defineConfig({
+  plugins: [react()],
+  server: {
+    port: 3000,
+    proxy: {
+      '/api': {
+        target: 'http://localhost:5000',
+        changeOrigin: true
+      }
+    }
+  }
+});
+
+--- Content of frontend\src\services\api.js ---
+
+import axios from 'axios';
+
+const API_URL = 'http://localhost:5000/api';
+
+export const api = {
+  getReports: () => axios.get(`${API_URL}/reports`),
+  createReport: (data) => axios.post(`${API_URL}/reports`, data),
+  getReport: (id) => axios.get(`${API_URL}/reports/${id}`),
+  updateReport: (id, data) => axios.put(`${API_URL}/reports/${id}`, data),
+  deleteReport: (id) => axios.delete(`${API_URL}/reports/${id}`)
+};
+
+--- Content of frontend\src\services\chartConfig.js ---
+
+
+
+
+--- Content of frontend\src\utils\constants.js ---
+
+
+
+
+--- Content of frontend\src\utils\helpers.js ---
+
+
+
+
+=== HTML Files ===
+
+
+--- Content of frontend\public\index.html ---
+
+
+<!-- frontend/public/index.html -->
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.ico" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Drilling Reports Manager</title>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/index.jsx"></script>
+  </body>
+</html>
+
+=== CSS Files ===
+
+
+--- Content of frontend\src\styles\tailwind.css ---
+
+
+
+
+=== Configuration Files ===
+
+
+--- Content of frontend\package.json ---
+
+
+{
+    "dependencies": {
+      "react": "^18.2.0",
+      "react-dom": "^18.2.0",
+      "react-router-dom": "^6.16.0",
+      "@tanstack/react-query": "^4.35.3",
+      "axios": "^1.5.0"
+    },
+    "devDependencies": {
+      "@vitejs/plugin-react": "^4.0.0",
+      "autoprefixer": "^10.4.14",
+      "postcss": "^8.4.24",
+      "tailwindcss": "^3.3.2",
+      "vite": "^4.3.9"
+    }
+  }
+
+--- Content of frontend\src\package.json ---
+
+
+
+
+--- Content of frontend\postcss.config.js ---
+
+export default {
+    plugins: {
+      tailwindcss: {},
+      autoprefixer: {},
+    },
+  }
+
+--- Content of frontend\tailwind.config.js ---
+
+/** @type {import('tailwindcss').Config} */
+export default {
+  content: [
+    "./index.html",
+    "./src/**/*.{js,ts,jsx,tsx}",
+  ],
+  theme: {
+    extend: {},
+  },
+  plugins: [],
+}
+
+--- Content of frontend\vite.config.js ---
+
+import { defineConfig } from 'vite';
+import react from '@vitejs/plugin-react';
+import path from 'path';
+
+export default defineConfig({
+  plugins: [react()],
+  server: {
+    port: 3000,
+    proxy: {
+      '/api': {
+        target: 'http://localhost:5000',
+        changeOrigin: true
+      }
+    }
+  }
+});
+
+=== Directory Tree ===
+
+backend/
+│   ├── __pycache__/
+│   │   ├── config.cpython-312.pyc
+│   ├── app/
+│   │   ├── __init__.py
+│   │   ├── __pycache__/
+│   │   │   ├── __init__.cpython-312.pyc
+│   │   ├── models/
+│   │   │   ├── __init__.py
+│   │   │   ├── __pycache__/
+│   │   │   │   ├── __init__.cpython-312.pyc
+│   │   │   │   ├── drilling_report.cpython-312.pyc
+│   │   │   │   ├── mud_property.cpython-312.pyc
+│   │   │   │   ├── operation.cpython-312.pyc
+│   │   │   ├── drilling_report.py
+│   │   │   ├── mud_property.py
+│   │   │   ├── operation.py
+│   │   ├── routes/
+│   │   │   ├── __init__.py
+│   │   │   ├── __pycache__/
+│   │   │   │   ├── __init__.cpython-312.pyc
+│   │   │   │   ├── analysis.cpython-312.pyc
+│   │   │   │   ├── operations.cpython-312.pyc
+│   │   │   │   ├── reports.cpython-312.pyc
+│   │   │   ├── analysis.py
+│   │   │   ├── operations.py
+│   │   │   ├── reports.py
+│   │   ├── services/
+│   │   │   ├── __init__.py
+│   │   │   ├── data_analyzer.py
+│   │   │   ├── report_processor.py
+│   │   ├── utils/
+│   │   │   ├── __init__.py
+│   │   │   ├── helpers.py
+│   ├── config.py
+│   ├── instance/
+│   │   ├── drilling.db
+│   ├── requirements.txt
+│   ├── run.py
+copydata.py
+frontend/
+│   ├── package.json
+│   ├── postcss.config.js
+│   ├── public/
+│   │   ├── assets/
+│   │   │   ├── images/
+│   │   │   │   ├── .gitkeep
+│   │   ├── favicon.ico
+│   │   ├── index.html
+│   ├── src/
+│   │   ├── App.jsx
+│   │   ├── components/
+│   │   │   ├── analysis/
+│   │   │   │   ├── MudAnalysis.jsx
+│   │   │   │   ├── SurveyData.jsx
+│   │   │   │   ├── TimeAnalysis.jsx
+│   │   │   ├── dashboard/
+│   │   │   │   ├── DepthChart.jsx
+│   │   │   │   ├── OperationsTable.jsx
+│   │   │   │   ├── StatsCards.jsx
+│   │   │   ├── layout/
+│   │   │   │   ├── Header.jsx
+│   │   │   │   ├── Layout.jsx
+│   │   │   │   ├── Sidebar.jsx
+│   │   │   ├── reports/
+│   │   │   │   ├── ReportDetail.jsx
+│   │   │   │   ├── ReportForm.jsx
+│   │   │   │   ├── ReportList.jsx
+│   │   ├── index.jsx
+│   │   ├── package.json
+│   │   ├── pages/
+│   │   │   ├── Analysis.jsx
+│   │   │   ├── Dashboard.jsx
+│   │   │   ├── Reports.jsx
+│   │   │   ├── Settings.jsx
+│   │   ├── services/
+│   │   │   ├── api.js
+│   │   │   ├── chartConfig.js
+│   │   ├── styles/
+│   │   │   ├── tailwind.css
+│   │   ├── utils/
+│   │   │   ├── constants.js
+│   │   │   ├── helpers.js
+│   ├── tailwind.config.js
+│   ├── vite.config.js
+project_contents.txt

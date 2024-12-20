@@ -1,0 +1,32 @@
+--- CONTEXT ---
+Web Application Project Structure
+
+This file contains the contents of all relevant files in the web application, including:
+1. Python backend files (.py)
+2. React/JavaScript files (.jsx, .js)
+3. Configuration files (.json, .config.js)
+4. HTML files (.html)
+5. CSS files (.css)
+
+--- BEGIN CONTENT ---
+
+
+
+=== Python Backend Files ===
+
+
+=== React/JavaScript Files ===
+
+
+=== HTML Files ===
+
+
+=== CSS Files ===
+
+
+=== Configuration Files ===
+
+
+=== Directory Tree ===
+
+project_contents.txt
